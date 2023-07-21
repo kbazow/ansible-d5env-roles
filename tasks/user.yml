@@ -1,0 +1,175 @@
+- name: add user group
+  ansible.builtin.group:
+    name: "sa-{{ metsci_username }}"
+    gid: 1001
+    state: present
+
+- name: "add user: sa-{{ metsci_username }}"
+  ansible.builtin.user:
+    name: "sa-{{ metsci_username }}"
+    uid: 1001
+    group: "sa-{{ metsci_username }}"
+    shell: /bin/bash
+    password: "{{ metsci_password | password_hash('sha512') }}"
+    update_password: on_create
+    #    groups: sudo,docker
+    groups:
+      - "sa-{{ metsci_username }}"
+      - sudo
+    append: yes
+    generate_ssh_key: yes
+    state: present
+  register: add_user_results
+
+# become_user block
+- block:
+  - name: Ensure .ssh directory exists.
+    ansible.builtin.file:
+      path: "~/.ssh"
+      state: directory
+      mode: 0700
+      owner: "sa-{{ metsci_username }}"
+      group: "sa-{{ metsci_username }}"
+    when: >
+      (metsci_username|d("", true) == "kedge" or
+       add_user_results.ssh_key_file|d("", true) != "") and
+      git_public_ssh_key|d("", true) != ""
+
+  - name: Ensure Git ssh public key is present for user in VM.
+    ansible.builtin.copy:
+      content: "{{ git_public_ssh_key }}"
+      dest: "/home/sa-{{ metsci_username }}/.ssh/{{ git_ssh_key_destination_file_name }}.pub"
+      mode: 0600
+      owner: "sa-{{ metsci_username }}"
+      group: "sa-{{ metsci_username }}"
+      force: yes
+    when: >
+      add_user_results.ssh_key_file|d("", true) != "" and
+      git_public_ssh_key|d("", true) != ""
+
+  - name: Ensure Git ssh private key is present for user in VM. For servers (not
+      dev boxes or VMs), this would be pretty stupid to do.
+    ansible.builtin.copy:
+      content: "{{ git_private_ssh_key }}"
+      dest: "/home/sa-{{ metsci_username }}/.ssh/{{ git_ssh_key_destination_file_name }}"
+      mode: 0600
+      owner: "sa-{{ metsci_username }}"
+      group: "sa-{{ metsci_username }}"
+      force: yes
+    when: >
+      add_user_results.ssh_key_file|d("", true) != "" and
+      git_public_ssh_key|d("", true) != ""
+
+#  - name: Add a host in the configuration
+#    community.general.ssh_config:
+#      user: "sa-{{ metsci_username }}"
+#      host: "UMS GitLab"
+#      hostname: "{{ git_server }}"
+#      identity_file: "/home/sa-{{ metsci_username }}/.ssh/{{ git_ssh_key_destination_file_name }}"
+#      port: '22'
+#      state: present
+
+  - name: "Call .bashrc from .bash_profile"
+    ansible.builtin.blockinfile:
+      path: "~/.bash_profile"
+      block: |
+        if [ -f ~/.bashrc ]; then
+          . ~/.bashrc
+        fi
+      insertafter: 'EOF'
+      state: present
+      create: yes
+
+  - name: "Add Autonomy bash aliases."
+    ansible.builtin.blockinfile:
+      path: "~/.bash_aliases"
+      block: |
+        alias clean_card="sudo rm -rf /sdcard/metron/*.log /sdcard/metron/*/* /sdcard/tars/*"
+        alias met_status="systemctl status met-*"
+
+        alias start_always="sudo systemctl start met-always"
+        alias restart_always="sudo systemctl restart met-always"
+        alias stop_always="sudo systemctl stop met-always"
+
+        alias start_autonomy="sudo systemctl start met-autonomy"
+        alias restart_autonomy="sudo systemctl restart met-autonomy"
+        alias stop_autonomy="sudo systemctl stop met-autonomy"
+
+        # Matt's alias for the same
+        alias start_log="sudo systemctl start met-always"
+        alias stop_log="sudo systemctl stop met-always"
+
+        alias start_sphere="sudo systemctl start met-autonomy"
+        alias stop_sphere="sudo systemctl stop met-autonomy"
+      insertafter: 'EOF'
+      state: present
+      create: yes
+
+  - name: "Install jetbrains-toolbox-{{ jetbrains_toolbox_version }} for sa-{{ metsci_username }} to
+          ~sa-{{ metsci_username }}/.local/share/JetBrains/Toolbox/"
+    ansible.builtin.command:
+      cmd: "{{ toolbox_install_dir }}/jetbrains-toolbox-{{ toolbox_version }}/jetbrains-toolbox"
+      creates: "~/.local/share/JetBrains/Toolbox/"
+    async: 300
+    poll: 5
+    args:
+      warn: no
+    ignore_errors: yes
+    register: jetbrains_toolbox_installer_results
+
+  - name: jetbrains-toolbox installer report
+    debug:
+      msg: jetbrains_toolbox_installer_results.stdout_lines
+    when: jetbrains_toolbox_installer_results is defined
+
+  - name: jetbrains-toolbox installer error report
+    debug:
+      msg: jetbrains_toolbox_installer_results.stderr_lines
+    when: jetbrains_toolbox_installer_results.stderr_lines is defined
+
+  - name: "Clone repo's and their submodules to ~/{{ project_src_repo_dir }}/{{ item.repo_name }}"
+    ansible.builtin.git:
+      repo: "git@{{ git_server }}:{{ item.repo_owner }}/{{ item.repo_name }}.git"
+      accept_hostkey: yes
+      recursive: yes
+      dest: "~/{{ project_src_repo_dir }}/{{ item.repo_name }}"
+      key_file: "~/.ssh/{{ git_ssh_key_destination_file_name }}"
+      update: no
+      version: "{{ item.version|d('master') }}"
+    with_items:
+      - { repo_owner: general, repo_name: volans, version: graveyard }
+      - { repo_owner: general, repo_name: ddsutil }
+      - { repo_owner: general, repo_name: rti_dds_bulk_converter }
+      #    - { repo_owner: general, repo_name: periscope }
+      - { repo_owner: autonomy, repo_name: gen-java-src-from-rti-idl }
+      - { repo_owner: autonomy, repo_name: schema }
+      - { repo_owner: autonomy, repo_name: schema_d }
+      - { repo_owner: autonomy, repo_name: vtbridge }
+      - { repo_owner: autonomy, repo_name: ancc }
+      - { repo_owner: autonomy, repo_name: autonomy }
+      - { repo_owner: autonomy, repo_name: graveyard }
+      - { repo_owner: autonomy, repo_name: testing_framework }
+      - { repo_owner: autonomy, repo_name: umaa }
+      - { repo_owner: autonomy, repo_name: ancc-testing }
+      - { repo_owner: kedge, repo_name: ansible-autonomy-role }
+
+  # Replace change ROOT variable in ~/{{ project_src_repo_dir }}/ancc-testing/update_dev.sh
+  # script to point to $HOME/{{ project_src_repo_dir }}, if it exists...
+  - name: "stat ~sa-{{ metsci_username }}/{{ project_src_repo_dir }}/ancc-testing/update_dev.sh"
+    ansible.builtin.stat:
+      path: "~sa-{{ metsci_username }}/{{ project_src_repo_dir }}/ancc-testing/update_dev.sh"
+    register: update_dev_txt
+
+  - name: "Change ROOT variable in ~/{{ project_src_repo_dir }}/ancc-testing/update_dev.sh to
+          point to $HOME/{{ project_src_repo_dir }}"
+    become_user: "sa-{{ metsci_username }}"
+    ansible.builtin.replace:
+      backup: yes
+      path: "~sa-{{ metsci_username }}/{{ project_src_repo_dir }}/ancc-testing/update_dev.sh"
+      regexp: '^ROOT="\$HOME/src"\s*$'
+      replace: 'ROOT="$HOME/{{ project_src_repo_dir }}"'
+    when: update_dev_txt.stat.exists
+
+  become_user: "sa-{{ metsci_username }}"
+
+...

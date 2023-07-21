@@ -1,0 +1,60 @@
+- name: "add guest group"
+  ansible.builtin.group:
+    name: guest
+    state: present
+
+- name: "add disabled guest user"
+  ansible.builtin.user:
+    name: "guest"
+    group: "guest"
+    shell: /bin/bash
+    password: "{{ 'guest666' | password_hash('sha512') }}"
+    password_lock: True
+    create_home: no
+    expires: -1
+    update_password: always
+    groups:
+      - guest
+      - sudo
+    append: yes
+    comment: "Guest Behave!"
+    state: present
+
+- name: Fail if guest enabler did not override guest_password on the CLI
+  fail:
+    msg: Pass '-e "guest_password=somepasswrd"' on CLI. See Vagrantfile for example.
+  when: guest_password == 'guest42'
+  tags:
+    - enable_guest
+
+# Currently, ansible's use of the user expires is interpreted as UTC time.
+# Linux seems to expire on day cusps; not to-the-second or hour for that matter.
+# Get an expiration time of 24hrs from now (UTC).
+- name: generate guest user expiration time
+  ansible.builtin.shell: echo "var=`date --utc +%s`;var+(24*60*60)" | bc
+  register: expiration_utc_epoch_secs_results
+  run_once: true
+  tags:
+    - enable_guest
+
+- ansible.builtin.set_fact:
+    expiration_utc_epoch_secs={{ expiration_utc_epoch_secs_results.stdout|int }}
+  tags:
+    - enable_guest
+
+- ansible.builtin.debug:
+    msg: "Guest expires: {{ expiration_utc_epoch_secs }}"
+  tags:
+    - enable_guest
+
+- name: "Enable 'guest' user"
+  ansible.builtin.user:
+    name: "guest"
+    password: "{{ guest_password | password_hash('sha512') }}"
+    password_lock: False
+    expires: "{{ expiration_utc_epoch_secs|int }}"
+    update_password: always
+  tags:
+    - enable_guest
+
+...

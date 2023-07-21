@@ -1,0 +1,19 @@
+---
+- name: Create directory /usr/local/share/ca-certificates
+  ansible.builtin.file:
+    path: "/usr/local/share/ca-certificates"
+    state: directory
+    mode: 0766
+
+- name: Copy Metron certs to /usr/local/share/ca-certificates
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: 0666
+  loop:
+    - { src: 'MetronEastCA.crt', dest: '/usr/local/share/ca-certificates' }
+    - { src: 'MetronRootCA.crt', dest: '/usr/local/share/ca-certificates' }
+  notify:
+    - Update Metron CA certificate trust
+
+...

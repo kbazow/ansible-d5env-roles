@@ -1,0 +1,150 @@
+---
+- name: apt installs autonomy dependencies
+  ansible.builtin.apt:
+    name:
+      #      - clang
+      - libignition-transport4-dev
+      - libnetcdf-dev
+      - lld
+      - ninja-build
+      - openjdk-11-jdk
+      - synaptic
+      - tmux
+      - valgrind
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+
+# Pointing to a different version python3 from default python3.6 causes an apt
+# failure to update the cache:
+# "# Failed to update apt cache: "
+#
+# % sudo apt update
+# ...
+# Fetched 252 kB in 1s (257 kB/s)
+# Traceback (most recent call last):
+#  File "/usr/lib/cnf-update-db", line 8, in <module>
+#    from CommandNotFound.db.creator import DbCreator
+#  File "/usr/lib/python3/dist-packages/CommandNotFound/db/creator.py", line 11, in <module>
+#    import apt_pkg
+#ModuleNotFoundError: No module named 'apt_pkg'
+#Reading package lists... Done
+#E: Problem executing scripts APT::Update::Post-Invoke-Success 'if /usr/bin/test -w /var/lib/command-not-found/ -a -e /usr/lib/cnf-update-db; then /usr/lib/cnf-update-db > /dev/null; fi'
+#E: Sub-process returned an error code
+#- name: Correct python version selected
+#  alternatives:
+#    name: python3
+#    link: /usr/bin/python3
+#    path: /usr/bin/python3.8
+
+#- name: Install pip packages
+#  pip:
+#    executable: pip3
+#    name:
+#      - pip
+#      - docker-compose
+#      - python-gitlab
+#    state: latest
+#  tags:
+#    - always
+
+- name: Add JAVA_HOME to everyone's environment
+  ansible.builtin.lineinfile:
+    path: /etc/environment
+    line: JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
+
+- name: Stat public metron ssh key in vagrant mounted directory
+  stat:
+    path: "{{ vagrant_install_files }}/{{metron_public_ssh_key}}"
+  register: metron_public_ssh_key_stat
+  when: >
+    vagrant_install_files|string != vagrant_install_files_mount|string and
+    vagrant_share_dir.failed|bool == False
+
+- name: Authorize public metron ssh key
+  ansible.builtin.authorized_key:
+    user: vagrant
+    key: "{{ lookup('file', '{{ vagrant_install_files }}/{{metron_public_ssh_key}}') }}"
+    state: present
+  when: >
+    vagrant_install_files|string != vagrant_install_files_mount|string and
+    vagrant_share_dir.failed|bool == False and
+    metron_public_ssh_key_stat is defined and
+    metron_public_ssh_key_stat.stat.exists
+
+- name: "ANCC: ensure sdcard exists"
+  ansible.builtin.file:
+    path: "/sdcard"
+    state: directory
+    mode: 0777
+
+#- name: Ensure UMAA deb installers is available
+#  find:
+#    paths: "{{ vagrant_install_files }}/Autonomy{{ autonomy_version }}"
+#    file_type: file
+#    pattern: "umaa*.deb"
+#  register: deb_package_installers
+#  failed_when: "deb_package_installers.matched < 1"
+#
+#- name: set_fact on dictionary
+#  set_fact:
+#    install_packages: |-
+#      {{ install_packages | default({}) |
+#      combine(
+#        { item.path| basename| lower| regex_search('^[a-z]+') :
+#          {
+#            'path': item.path,
+#            'version': item.path| basename| lower| regex_search('[.\d]+') }
+#        }
+#      ) }}
+#  with_items: "{{ deb_package_installers.files }}"
+#  when: "deb_package_installers.matched >= 1"
+#
+#- name: Gather the package facts
+#  ansible.builtin.package_facts:
+#    manager: auto
+#  when: "deb_package_installers.matched >= 1"
+#
+#- name: package version check
+#  debug:
+#    msg: >
+#      {{ item.key }} needs to be
+#      {{ (ansible_facts.packages[ item.key ] is undefined)|
+#      ternary('installed', 'upgraded from ansible_facts.packages[ item.key ][0].version to item.value.version') }}
+#  when: >
+#    deb_package_installers.matched >= 1 and
+#    ansible_facts.packages[ item.key ] is undefined or
+#    ansible_facts.packages[ item.key ][0].version != item.value.version
+#  loop: "{{ install_packages | dict2items }}"
+#
+#- name: Uninstall umaa if out dated
+#  ansible.builtin.apt:
+#    name: "{{ 'umaa' + autonomy_version  + '-generic' }}"
+#    state: absent
+#  when: >
+#    deb_package_installers.matched >= 1 and
+#    ansible_facts.packages[ 'umaa' + autonomy_version + '-generic' ] is defined and
+#    ansible_facts.packages[ 'umaa' + autonomy_version + '-generic' ][0].version != install_packages.umaa.version
+#
+#- name: Install UMAA .deb package
+#  ansible.builtin.apt:
+#    deb: "{{ item.value.path }}"
+#  when: >
+#    deb_package_installers.matched >= 1 and
+#    ansible_facts.packages[ item.key ] is undefined or
+#    ansible_facts.packages[ item.key ][0].version != item.value.version
+#  loop: "{{ install_packages | dict2items }}"
+
+- name: "ANCC: ensure sdcard dirs exists"
+  ansible.builtin.file:
+    path: "/sdcard/metron/gen_missions"
+    state: directory
+    mode: 0777
+    owner: "sa-{{ metsci_username }}"
+    group: "sa-{{ metsci_username }}"
+
+- import_tasks: rti.yml
+- import_tasks: volans.yml
+- import_tasks: cmake.yml
+
+...

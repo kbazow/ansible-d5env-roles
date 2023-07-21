@@ -1,0 +1,62 @@
+---
+- name: Add key for gazebo PPA repository
+  ansible.builtin.apt_key:
+    url: https://packages.osrfoundation.org/gazebo.key
+    state: present
+  tags:
+    - always
+
+- name: Add gazebo repository into
+        sources.list.d/packages_osrfoundation_org_gazebo_ubuntu_stable.list
+  ansible.builtin.apt_repository:
+    repo: deb http://packages.osrfoundation.org/gazebo/ubuntu-stable bionic main
+    state: present
+    update_cache: yes
+  tags:
+    - always
+
+- name: apt install volans dependencies
+  ansible.builtin.apt:
+    name:
+      - gazebo11
+      - libgazebo11-dev
+      - libboost-all-dev
+      - libsystemd-dev
+      - libnetcdf-dev
+    state: present
+  tags:
+    - always
+
+# Replace some lines in a 3rd party CMakeLists.txt file, if it exists...
+- name: "stat ~sa-{{ metsci_username }}/{{ project_src_repo_dir }}/volans/core/3rdParty/netcdf/liblib/CMakeLists.txt"
+  stat:
+    path: "~sa-{{ metsci_username }}/{{ project_src_repo_dir }}/volans/core/3rdParty/netcdf/liblib/CMakeLists.txt"
+  register: netcdf_liblib_CMakeLists_txt
+
+- name: "fix ~sa-{{ metsci_username }}/{{ project_src_repo_dir }}/volans/core/3rdParty/netcdf/liblib/CMakeLists.txt"
+  become_user: "sa-{{ metsci_username }}"
+  ansible.builtin.replace:
+    backup: yes
+    path: "~sa-{{ metsci_username }}/{{ project_src_repo_dir }}/volans/core/3rdParty/netcdf/liblib/CMakeLists.txt"
+    after: "IF\\(\\$\\{CMAKE_VERSION\\} VERSION_LESS 2.8.12\\)\n"
+    before: "ENDIF\\(\\)"
+    regexp: '(.*\n)*'
+    replace: >2
+        INSTALL(
+          TARGETS netcdf EXPORT netCDFTargets
+          LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT libraries
+          ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT libraries
+          RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT libraries
+          PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+          )
+      ELSE()
+        INSTALL(
+          TARGETS netcdf EXPORT netCDFTargets
+          LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT libraries
+          ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT libraries
+          RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT libraries
+          INCLUDES
+          )
+  when: netcdf_liblib_CMakeLists_txt.stat.exists|bool == True
+
+...

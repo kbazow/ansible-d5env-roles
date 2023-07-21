@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="https://maven.apache.org/SETTINGS/1.2.0  https://maven.apache.org/xsd/settings-1.2.0.xsd">
+
+    <servers>
+        <server>
+            <id>metron-maven-server</id>
+            <username>maven</username>
+            <password>maven</password>
+            <filePermissions>666</filePermissions>
+            <directoryPermissions>777</directoryPermissions>
+        </server>
+
+        <server>
+            <id>glimpse-maven-server</id>
+            <username>maven</username>
+            <password>maven</password>
+            <filePermissions>666</filePermissions>
+            <directoryPermissions>777</directoryPermissions>
+        </server>
+
+        <!-- For parent-poms v7 and earlier -->
+        <server>
+            <id>devel.metsci.com</id>
+            <username>maven</username>
+            <password>maven</password>
+            <filePermissions>666</filePermissions>
+            <directoryPermissions>777</directoryPermissions>
+        </server>
+
+        <!-- For Division 5 stuff -->
+        <server>
+            <id>maven.metsci</id>
+            <username>deployment</username>
+            <password>deployment123</password>
+            <filePermissions>666</filePermissions>
+            <directoryPermissions>777</directoryPermissions>
+        </server>
+    </servers>
+
+    <mirrors>
+        <!-- Fill in for codehaus-snapshots, which is broken but still referred to by some maven plugins -->
+        <mirror>
+            <id>fake-codehaus-snapshots</id>
+            <url>http://maven.metsci.com/metsci-snapshots</url>
+            <mirrorOf>codehaus-snapshots</mirrorOf>
+        </mirror>
+        <mirror>
+            <id>metsci-releases-http-unblock</id>
+            <mirrorOf>metsci-releases</mirrorOf>
+            <url>http://maven.metsci.com/metsci-releases</url>
+        </mirror>
+        <mirror>
+            <id>metsci-snapshots-http-unblock</id>
+            <mirrorOf>metsci-snapshots</mirrorOf>
+            <url>http://maven.metsci.com/metsci-snapshots</url>
+        </mirror>
+        <mirror>
+            <id>thirdparty-http-unblock</id>
+            <mirrorOf>thirdparty</mirrorOf>
+            <url>http://maven.metsci.com/thirdparty</url>
+        </mirror>
+    </mirrors>
+
+    <activeProfiles>
+        <activeProfile>metron</activeProfile>
+    </activeProfiles>
+
+    <!-- <usePluginRegistry>true</usePluginRegistry> -->
+
+    <pluginGroups>
+        <pluginGroup>com.metsci.maven.plugins</pluginGroup>
+        <pluginGroup>fr.jcgay.maven.plugins</pluginGroup>
+    </pluginGroups>
+
+    <profiles>
+        <profile>
+            <id>java8-compat</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+        </profile>
+
+        <profile>
+            <id>java8-only</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+        </profile>
+
+        <profile>
+            <id>release</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+        </profile>
+
+        <profile>
+            <id>internal</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+        </profile>
+
+        <profile>
+            <id>sonatype-oss-release</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+        </profile>
+
+        <profile>
+
+            <id>metron</id>
+
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+
+            <properties>
+                <release-deployment-url>https://maven.metsci.com:7080/metsci-releases</release-deployment-url>
+                <snapshot-deployment-url>https://maven.metsci.com:7080/metsci-snapshots</snapshot-deployment-url>
+                <downloadSources>true</downloadSources>
+            </properties>
+
+            <repositories>
+                <repository>
+                    <id>metsci-releases</id>
+                    <url>https://maven.metsci.com/metsci-releases</url>
+                </repository>
+                <repository>
+                    <id>metsci-snapshots</id>
+                    <url>https://maven.metsci.com/metsci-snapshots</url>
+                </repository>
+                <repository>
+                    <id>thirdparty</id>
+                    <url>https://maven.metsci.com/thirdparty</url>
+                </repository>
+
+                <!-- External Repositories -->
+                <repository>
+                    <id>clojars.org</id>
+                    <url>https://clojars.org/repo</url>
+                </repository>
+
+                <repository>
+                    <id>geotools.org</id>
+                    <url>https://repo.osgeo.org/repository/release/</url>
+                </repository>
+
+            </repositories>
+
+            <pluginRepositories>
+
+                <pluginRepository>
+                    <id>metsci-releases</id>
+                    <url>https://maven.metsci.com/metsci-releases</url>
+                </pluginRepository>
+                <pluginRepository>
+                    <id>metsci-snapshots</id>
+                    <url>https://maven.metsci.com/metsci-snapshots</url>
+                </pluginRepository>
+                <pluginRepository>
+                    <id>thirdparty</id>
+                    <url>https://maven.metsci.com/thirdparty</url>
+                </pluginRepository>
+
+                <!-- External Repositories -->
+                <pluginRepository>
+                    <id>clojars.org</id>
+                    <url>https://clojars.org/repo</url>
+                </pluginRepository>
+
+            </pluginRepositories>
+
+
+        </profile>
+    </profiles>
+
+</settings>

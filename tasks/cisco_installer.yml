@@ -1,0 +1,70 @@
+---
+# The Virginia Metron URL to connect is https://vpnva.metsci.com
+
+- name: Cisco AnyConnect installed?
+  stat:
+    path: '/opt/cisco/anyconnect/bin/vpn'
+  register: cisco_vpn
+
+# block of tasks when Cisco AnyConnect is not installed
+- block:
+  - name: vagrant user have Cisco AnyConnect installer?
+    stat:
+      path: "{{ local_cisco_anyconnect_installer }}"
+    register: local_cisco_anyconnect_installer_result
+
+  # block of tasks when Cisco AnyConnect is not downloaded
+  - block:
+    - name: Ensure Cisco installer is available
+      find:
+        paths: "{{ vagrant_install_files }}"
+        file_type: file
+        pattern: "{{ cisco_anyconnect_installer_wild }}"
+      register: find_results
+
+    - name: copy Cisco installer
+      copy:
+        remote_src: yes
+        src: "{{ find_results.files[0].path }}"
+        dest: "{{ local_cisco_anyconnect_installer }}"
+        owner: vagrant
+        group: vagrant
+        mode: preserve
+      when: find_results.matched > 0
+
+    - name: vagrant user have Cisco AnyConnect installer?
+      stat:
+        path: "{{ local_cisco_anyconnect_installer }}"
+      register: local_cisco_anyconnect_installer_result
+
+    when: >
+      (mounted_installers_dir.failed|bool == False or
+      vagrant_share_dir.exists|bool == False) and
+      local_cisco_anyconnect_installer_result.stat.exists == False
+
+  # block of tasks when Cisco AnyConnect is downloaded
+  - block:
+    - name: Run Cisco installer
+      command:
+        cmd: "/home/vagrant/Downloads/cisco_installer.sh"
+        creates: "/opt/cisco/anyconnect/bin/vpn"
+      async: 300
+      poll: 5
+      args:
+        warn: no
+      ignore_errors: yes
+      register: cisco_installer_results
+
+    - name: Cisco installer error report
+      debug:
+        msg: cisco_installer_results.stderr_lines
+      when:  cisco_installer_results.rc >= 1
+
+    - name: Cisco installer report
+      debug:
+        msg: cisco_installer_results.stdout_lines
+      when: local_cisco_anyconnect_installer_result.stat.exists == True
+
+  when: cisco_vpn.stat.exists == False
+
+...

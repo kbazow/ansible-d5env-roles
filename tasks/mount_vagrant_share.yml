@@ -1,0 +1,67 @@
+---
+# This 'vagrant' mount directory is not the same as the `/vagrant` shared directory
+# associated with running vagrant to share provisioning scripts to support running
+# the `ansible_local` on the guest (running an Ansible control node on a Windows
+# host is not supported). The 'vagrant' mount directory here is a Metron 'share'
+# drive that has things that this Ansible role will install onto the guest.
+#
+# Fall back to role file directory if not attempting to mount
+
+- name: apt installs that should always be the most current
+  ansible.builtin.apt:
+    name:
+      - cifs-utils
+    state: present
+
+- name: Create vagrant mount directory
+  ansible.builtin.file:
+    path: "{{ vagrant_install_files }}"
+    state: directory
+  when: vagrant_install_files|string == vagrant_install_files_mount|string
+
+- name: Mount SMB network share that has all the vargrant installables
+  ansible.builtin.mount:
+    src: "{{ vagrant_install_files_share }}"
+    path: "{{ vagrant_install_files }}"
+    fstype: cifs
+    opts: "credentials={{ vagrant_credentials }},vers=1.0"
+    state: mounted
+  when: vagrant_install_files|string == vagrant_install_files_mount|string
+  register: mounted_installers_dir
+  notify:
+    - unmount vagrant SMB share
+  tags:
+    - always
+
+- name: If SMB network share already mounted, force unmount at end of provision
+  ansible.builtin.debug:
+    msg: "{{ vagrant_install_files }} SMB network share already mounted; force unmount"
+  notify:
+    - unmount vagrant SMB share
+  changed_when: true
+  when: not mounted_installers_dir.changed
+
+# During debug, prove that the vagrant directory was indeed mounted.
+- name: Force ansible to regather ansible_mounts facts
+  ansible.builtin.setup: filter='ansible_mounts'
+  tags:
+    - debug
+
+- name: Check for Vagrant/Ansible mounts
+  ansible.builtin.debug:
+    msg: "Vagrant mount: {{ item.mount }}; results of mount module: {{ mounted_installers_dir }}"
+  when: mounted_installers_dir.failed|bool == False and item.mount|string == vagrant_install_files_mount|string
+  with_items: "{{ ansible_mounts }}"
+  tags:
+    - debug
+
+- name: "If not attempting to mount SMB network, check for a {{ vagrant_install_files }} directory"
+  ansible.builtin.stat:
+    path: "{{ vagrant_install_files }}"
+  register: vagrant_share_dir
+  when: vagrant_install_files|string != vagrant_install_files_mount|string
+
+- name: "Fail if not attempting to mount SMB network, and {{ vagrant_install_files }} doesn't exist"
+  ansible.builtin.fail:
+    msg: "Not attempting to mount SMB network, and {{ vagrant_install_files }} doesn't exist"
+  when: vagrant_install_files|string != vagrant_install_files_mount|string and vagrant_share_dir.stat.isdir == False

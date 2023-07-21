@@ -1,0 +1,55 @@
+---
+# This file is for var likely to be overridden.  For vars,
+# unlikely to be overridden, use vars/main.yml.
+
+vagrant_install_files_share: "//cifs_svr.metsci.com/cetus-div5/Projects/Periscope/vagrant"
+vagrant_install_files_mount: "/mnt/vagrant"
+
+vagrant_install_files: "{{ vagrant_install_files_mount }}"
+#vagrant_install_files: "/vagrant/files"
+
+vagrant_credentials: "/home/vagrant/.ssh/.credential"
+
+cisco_anyconnect_installer_wild: 'anyconnect-linux64*.sh'
+local_cisco_anyconnect_installer: '/home/vagrant/Downloads/cisco_installer.sh'
+
+jetbrains_toolbox_version: "1.22.10970"
+
+rti_version: '6.1.0'
+rti_pkg_gcc_version: 'gcc7.3.0'
+rti_installer_wild: 'rti_connext_dds-{{ rti_version }}-pro*-*.run'
+rti_installed_pkg: '/opt/rti/lib/x64Linux4{{ rti_pkg_gcc_version }}'
+rti_pkg_wild: 'rti_connext_dds-{{ rti_version }}-pro*{{ rti_pkg_gcc_version }}.rtipkg'
+
+rti_installed_wild: 'rti_connext_dds-*'
+
+rti_license: 'rti_license.dat'
+
+project_src_repo_dir: "src"
+
+metron_public_ssh_key: 'metron_vagrant_rsa.pub'
+
+autonomy_version: 2.0.2
+
+guest_password: "guest42"
+
+git_server: "d5dev.metsci.com"
+git_ssh_key_destination_file_name: "{{ (git_public_ssh_key|d('', true) != '') | ternary('git_rsa', 'id_rsa') }}"
+
+git_install_from_source: true
+git_install_path: "/usr"
+git_version: "2.35.1"
+
+# If git is already installed at an older version, force a new source build.
+# Only applies if git_install_from_source is `true`.
+git_install_from_source_force_update: true
+
+# Can't nail-in a specific version via apt.kitware.com due to this issue:
+# https://gitlab.kitware.com/cmake/cmake/-/issues/22683#note_1076888
+# :-P
+apt_kitware_com_retains_old_version: false
+# Avoid mismatching cmake versions between CLion and CLI by referencing CLion's bundled cmake
+# Find CLion ver here: CLion > Build, Execution, Deployment > Toolchains
+cmake_version: 3.21.1-0kitware1ubuntu18.04.1
+cmake_deb_source: "deb https://apt.kitware.com/ubuntu/ bionic main"
+cmake_gpg_key_url: "https://apt.kitware.com/keys/kitware-archive-latest.asc"

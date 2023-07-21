@@ -1,0 +1,15 @@
+# This file is not run as part of the playbook. It is just a notebook of handy
+# tasks for tasks that may become handy at some point.
+
+- name: Ending the 1st play now
+  meta: end_play
+
+- name: Ending the Play
+  meta: end_play
+
+- name: Upgrading?
+  ansible.builtin.debug:
+    msg: >
+      '{{ (cmake_current_version == "0.0.0")|
+      ternary("CMake is not installed;", "CMake v{{ cmake_current_version}}") }}
+      upgrading --> {{ cmake_version }}'

@@ -1,0 +1,19 @@
+---
+# From role project root directory:
+# $ ansible-galaxy install -r ./roles/requirements.yml
+#
+# The 'versions' related to the role version, not the version of the package
+# being installed.
+roles:
+  - src: webarchitect609.google_chrome
+    name: google_chrome
+    version: 1.0.0
+  - src: webarchitect609.jet_brains_toolbox
+    name: jet_brains_toolbox
+    version: 1.0.4
+  - src: geerlingguy.git
+    name: current_git
+
+collections:
+  - name: community.general
+    version: 4.4.0

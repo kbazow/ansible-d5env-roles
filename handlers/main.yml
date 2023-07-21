@@ -1,0 +1,16 @@
+---
+
+- name: Run ldconfig after adding configs to /etc/ld.so.conf.d
+  command: ldconfig
+
+- name: unmount vagrant SMB share
+  ansible.builtin.mount:
+    path: "{{ vagrant_install_files_mount }}"
+    state: absent
+  tags:
+    - always
+
+- name: Update Metron CA certificate trust
+  ansible.builtin.command: update-ca-certificates
+
+...

@@ -1,0 +1,83 @@
+---
+- hosts: all
+  become: yes # Meaning: all tasks will be executed with sudo
+  force_handlers: True
+  vars_files:
+    - defaults/main.yml
+    - vars/main.yml
+    - secrets.yml
+
+  vars:
+    toolbox_version: "{{ jetbrains_toolbox_version }}"
+
+  roles:
+    - current_git
+    - google_chrome
+    - jet_brains_toolbox
+
+  pre_tasks:
+    - name: "Verify that required input string variables (found within secrets.yml)
+            were provided and valid"
+      assert:
+        that:
+          - "{{ has_var }} is defined"
+          - "{{ has_var }} | length > 0"
+          - "{{ has_var }} != None"
+        fail_msg: "{{ has_var }} needs to be set for the role to work"
+        success_msg: "Required variable {{ has_var }} is defined"
+        quiet: yes
+      loop_control:
+        loop_var: has_var
+      with_items:
+        - metsci_username
+        - metsci_password
+        - git_private_ssh_key
+        - git_public_ssh_key
+      tags:
+        - always
+
+    - name: Import role pre_tasks
+      import_tasks: 'tasks/pre_tasks.yml'
+
+  tasks:
+    # To reduce the insecurity of this sensitive data, this plain text file
+    # is being placed in vagrant's privilege-reduced .ssh directory as root-owned
+    # file with mode set to only root being allowed to read.  The file is removed
+    # at the end of the play, whether the play is successful or not by using a
+    # forced handler.
+    - name: Create credentials file having metsci username/password collected from
+            within an Ansible vault file.
+      ansible.builtin.copy:
+        content: |
+          username={{ metsci_username }}
+          password={{ metsci_password }}
+        dest: "{{ vagrant_credentials }}"
+        mode: u=r
+      register: create_credentials
+      notify:
+        - If credentials file was created, handler is forced to remove it
+      tags:
+        - always
+
+    - name: If credential file already created, force deletion
+      debug:
+        msg: "Force deletion of {{ vagrant_credentials }}"
+      notify:
+        - If credentials file was created, handler is forced to remove it
+      changed_when: true
+      when: not create_credentials.changed
+
+    - name: Import autonomy role tasks
+      import_tasks: tasks/main.yml
+
+  handlers:
+    - import_tasks: handlers/main.yml
+
+    - name: If credentials file was created, handler is forced to remove it
+      ansible.builtin.file:
+        path: "{{ vagrant_credentials }}"
+        state: absent
+      tags:
+        - always
+
+...

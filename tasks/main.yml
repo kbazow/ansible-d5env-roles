@@ -1,0 +1,74 @@
+---
+
+- name: apt installs that should always be checked for the latest updates
+  ansible.builtin.apt:
+    name:
+      - libssl-dev
+      - libsystemd-dev
+      - ssh
+    state: latest
+  tags:
+    - always
+
+- name: add deadsnakes/ppa
+  ansible.builtin.apt_repository:
+    repo: "{{ item }}"
+    state: present
+  with_items:
+    - ppa:deadsnakes/ppa
+  tags:
+    - always
+
+- name: apt installs autonomy dependencies
+  ansible.builtin.apt:
+    name:
+      - build-essential
+      - htop
+      - net-tools
+      - python3-pip
+      - python3.9
+      - software-properties-common
+      - terminator
+      - xclip
+      - openconnect
+      - network-manager-openconnect
+      - network-manager-openconnect-gnome
+    state: present
+
+# On the first run of this provision, the 'ansible_local' type will cause the
+# latest version of ansible to be installed. However, it won't be updated
+# again once present.  When run with the 'periodic' tag, Ansible will be forced
+# to update.
+- name: apt installs most current ansible
+  apt:
+    name:
+      - ansible
+    state: latest
+  tags:
+    - periodic
+
+- name: apt removes dependencies and clean up
+  ansible.builtin.apt:
+    name:
+      - vitrualenv
+    state: absent
+
+#- name: Install stormssh Python module
+#  pip:
+#    name: stormssh
+#    state: present
+
+- import_tasks: mount_vagrant_share.yml
+- import_tasks: cisco_installer.yml
+- import_tasks: user.yml
+- import_tasks: guest_user.yml
+- import_tasks: autonomy.yml
+
+# autoremove: This autoremove maaay be removing the needed libgazebo11-dev for volans where
+# /usr/lib/x86_64-linux-gnu/cmake/gazebo/ is eradicated for some reason (it has no dependency?)
+- name: Clean up apt unused packages and dependencies
+  ansible.builtin.apt:
+    cache_valid_time: 3600
+#    autoclean: yes
+#    autoremove: yes
+...

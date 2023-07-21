@@ -1,0 +1,137 @@
+---
+- name: become_user block
+  block:
+     # Determine if RTI is installed for the user
+    - name: "Determine if RTI ({{ rti_version }} installed"
+      ansible.builtin.stat:
+        path: "/home/sa-{{ metsci_username }}/rti_connext_dds-{{ rti_version }}"
+      register: is_rti_installed
+
+    - name: block to install RTI as user
+      block:
+        - name: "Ensure RTI installer (v{{ rti_version }}) is available ({{ rti_installer_wild }})"
+          ansible.builtin.find:
+            paths: "{{ vagrant_install_files }}"
+            file_type: file
+            pattern: "{{ rti_installer_wild }}"
+          register: rti_installer
+          failed_when: rti_installer.matched < 1
+
+        - name: "Find any prior versions that need to be uninstalled"
+          ansible.builtin.find:
+            paths: "/home/sa-{{ metsci_username }}"
+            file_type: directory
+            pattern: "{{ rti_installed_wild }}"
+          register: rti_installed
+
+        - name: Uninstall prior versions of RTI
+          ansible.builtin.command:
+            cmd: "{{ rti_installed.files[0].path }}/uninstall/uninstall --mode unattended"
+            removes: "{{ rti_installed.files[0].path }}"
+          loop: "{{ rti_installed.files }}"
+          when: rti_installed.matched > 0
+
+        - name: "Install RTI Connext DDS v{{ rti_version }}"
+          ansible.builtin.command:
+            cmd: "{{ rti_installer.files[0].path }} --mode unattended"
+            creates: "/home/sa-{{ metsci_username }}/rti_connext_dds-{{ rti_version }}"
+          async: 600
+          poll: 10
+          register: rti_installer_results
+
+        - name: RTI installer error report
+          ansible.builtin.debug:
+            msg: rti_installer_results.stderr_lines
+          when:  rti_installer_results.rc >= 1
+
+        - name: RTI installer report
+          ansible.builtin.debug:
+            msg: rti_installer_results.stdout_lines
+
+      when: not is_rti_installed.stat.exists
+
+  become_user: "sa-{{ metsci_username }}"
+
+# Back to vagrant user sudo
+# RTI MUST be installed for the user
+- name:
+  ansible.builtin.stat:
+    path: "/home/sa-{{ metsci_username }}/rti_connext_dds-{{ rti_version }}"
+  register: rti_installed
+
+- name: Assert RTI installed
+  ansible.builtin.fail:
+    msg: "Expected: /home/sa-{{ metsci_username }}/rti_connext_dds-{{ rti_version }}"
+  when: not rti_installed.stat.exists
+
+- name: Create symbolic link of RTI to /opt/rti
+  ansible.builtin.file:
+    src: "/home/sa-{{ metsci_username }}/rti_connext_dds-{{ rti_version }}"
+    dest: "/opt/rti"
+    state: link
+
+- name: Add RTI path to environment vars
+  ansible.builtin.lineinfile:
+    path: /etc/environment
+    line: "{{ item.var }}={{ item.value }}"
+  loop:
+    - { var: 'RTI_HOME', value: '/opt/rti' }
+    - { var: 'NDDSHOME', value: '/opt/rti' }
+    - { var: 'CONNEXTDDS_DIR', value: '/opt/rti' }
+
+- name: become_user block (again)
+  block:
+    - name: "Determine if RTI package v{{ rti_version }}/{{ rti_pkg_gcc_version }} installed"
+      ansible.builtin.stat:
+        path: "{{ rti_installed_pkg }}"
+      register: rti_pkg_installed
+
+    - name: "block to install RTI package v{{ rti_version }}/{{ rti_pkg_gcc_version }} as user"
+      block:
+        - name: "Ensure RTI package v{{ rti_version }}/{{ rti_pkg_gcc_version }} is available"
+          ansible.builtin.find:
+            paths: "{{ vagrant_install_files }}"
+            file_type: file
+            pattern: "{{ rti_pkg_wild }}"
+          register: rti_pkg_installer
+          failed_when: rti_pkg_installer.matched < 1
+
+        - name: Load RTI x64Linux4gcc{{ rti_version }}
+          ansible.builtin.command:
+            cmd: "/opt/rti/bin/rtipkginstall {{ rti_pkg_installer.files[0].path }}"
+            creates: "{{ rti_installed_pkg }}"
+          register: rti_pkg_installer_results
+
+        - name: RTI package installer error report
+          ansible.builtin.debug:
+            msg: rti_pkg_installer_results.stderr_lines
+          when:  rti_pkg_installer_results.rc >= 1
+
+        - name: RTI package installer report
+          ansible.builtin.debug:
+            msg: rti_pkg_installer_results.stdout_lines
+
+      when: not rti_pkg_installed.stat.exists
+
+    - name: Copy RTI license
+      ansible.builtin.copy:
+        remote_src: yes
+        src: "{{ vagrant_install_files }}/{{ rti_license }}"
+        dest: "/opt/rti"
+
+  environment:
+    RTI_HOME: '/opt/rti'
+    NDDSHOME: '/opt/rti'
+    CONNEXTDDS_DIR: '/opt/rti'
+  become_user: "sa-{{ metsci_username }}"
+
+
+# Back to vagrant user sudo (again)
+- name: Add RTI conf to /etc/ld.so.conf.d
+  ansible.builtin.lineinfile:
+    path: /etc/ld.so.conf.d/rti.conf
+    line: "{{ rti_installed_pkg }}"
+    create: yes
+  notify: Run ldconfig after adding configs to /etc/ld.so.conf.d
+
+...
